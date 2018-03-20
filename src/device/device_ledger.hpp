@@ -33,8 +33,12 @@
 #include <cstddef>
 #include <string>
 #include "device.hpp"
+
+#ifdef WITH_DEVICE_LEDGER
 #include <PCSC/winscard.h>
 #include <PCSC/wintypes.h>
+#endif //WITH_DEVICE_LEDGER
+
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 
