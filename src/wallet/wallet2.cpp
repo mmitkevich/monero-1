@@ -115,6 +115,8 @@ using namespace cryptonote;
 #define STAGENET_SEGREGATION_FORK_HEIGHT 1000000
 #define SEGREGATION_FORK_VICINITY 1500 /* blocks */
 
+static const std::string PUB_KEY_SIGNATURE_MAGIC = "SigPkV1";
+
 
 namespace
 {
@@ -9261,6 +9263,40 @@ bool wallet2::verify(const std::string &data, const cryptonote::account_public_a
   }
   memcpy(&s, decoded.data(), sizeof(s));
   return crypto::check_signature(hash, address.m_spend_public_key, s);
+}
+
+std::string wallet2::sign_multisig_participant(const std::string& data) const
+{
+  CHECK_AND_ASSERT_THROW_MES(m_multisig, "Wallet is not multisig");
+
+  crypto::hash hash;
+  crypto::cn_fast_hash(data.data(), data.size(), hash);
+  const cryptonote::account_keys &keys = m_account.get_keys();
+  crypto::signature signature;
+  crypto::generate_signature(hash, get_multisig_signer_public_key(), keys.m_spend_secret_key, signature);
+  return PUB_KEY_SIGNATURE_MAGIC + tools::base58::encode(std::string((const char *)&signature, sizeof(signature)));
+}
+
+bool wallet2::verify_with_public_key(const std::string &data, const crypto::public_key &public_key, const std::string &signature) const
+{
+  if (signature.size() < PUB_KEY_SIGNATURE_MAGIC.size() || signature.substr(0, PUB_KEY_SIGNATURE_MAGIC.size()) != PUB_KEY_SIGNATURE_MAGIC) {
+    LOG_PRINT_L0("Signature header check error");
+    return false;
+  }
+  crypto::hash hash;
+  crypto::cn_fast_hash(data.data(), data.size(), hash);
+  std::string decoded;
+  if (!tools::base58::decode(signature.substr(PUB_KEY_SIGNATURE_MAGIC.size()), decoded)) {
+    LOG_PRINT_L0("Signature decoding error");
+    return false;
+  }
+  crypto::signature s;
+  if (sizeof(s) != decoded.size()) {
+    LOG_PRINT_L0("Signature decoding error");
+    return false;
+  }
+  memcpy(&s, decoded.data(), sizeof(s));
+  return crypto::check_signature(hash, public_key, s);
 }
 //----------------------------------------------------------------------------------------------------
 crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::wallet2::transfer_details &td) const
