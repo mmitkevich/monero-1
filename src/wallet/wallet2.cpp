@@ -115,7 +115,7 @@ using namespace cryptonote;
 #define STAGENET_SEGREGATION_FORK_HEIGHT 1000000
 #define SEGREGATION_FORK_VICINITY 1500 /* blocks */
 
-static const std::string PUB_KEY_SIGNATURE_MAGIC = "SigPkV1";
+static const std::string MULTISIG_SIGNATURE_MAGIC = "SigMultisigPkV1";
 
 
 namespace
@@ -9323,25 +9323,25 @@ std::string wallet2::sign_multisig_participant(const std::string& data) const
   const cryptonote::account_keys &keys = m_account.get_keys();
   crypto::signature signature;
   crypto::generate_signature(hash, get_multisig_signer_public_key(), keys.m_spend_secret_key, signature);
-  return PUB_KEY_SIGNATURE_MAGIC + tools::base58::encode(std::string((const char *)&signature, sizeof(signature)));
+  return MULTISIG_SIGNATURE_MAGIC + tools::base58::encode(std::string((const char *)&signature, sizeof(signature)));
 }
 
 bool wallet2::verify_with_public_key(const std::string &data, const crypto::public_key &public_key, const std::string &signature) const
 {
-  if (signature.size() < PUB_KEY_SIGNATURE_MAGIC.size() || signature.substr(0, PUB_KEY_SIGNATURE_MAGIC.size()) != PUB_KEY_SIGNATURE_MAGIC) {
-    LOG_PRINT_L0("Signature header check error");
+  if (signature.size() < MULTISIG_SIGNATURE_MAGIC.size() || signature.substr(0, MULTISIG_SIGNATURE_MAGIC.size()) != MULTISIG_SIGNATURE_MAGIC) {
+    MERROR("Signature header check error");
     return false;
   }
   crypto::hash hash;
   crypto::cn_fast_hash(data.data(), data.size(), hash);
   std::string decoded;
-  if (!tools::base58::decode(signature.substr(PUB_KEY_SIGNATURE_MAGIC.size()), decoded)) {
-    LOG_PRINT_L0("Signature decoding error");
+  if (!tools::base58::decode(signature.substr(MULTISIG_SIGNATURE_MAGIC.size()), decoded)) {
+    MERROR("Signature decoding error");
     return false;
   }
   crypto::signature s;
   if (sizeof(s) != decoded.size()) {
-    LOG_PRINT_L0("Signature decoding error");
+    MERROR("Signature decoding error");
     return false;
   }
   memcpy(&s, decoded.data(), sizeof(s));
