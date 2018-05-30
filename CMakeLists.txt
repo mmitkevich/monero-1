@@ -439,14 +439,6 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/translations")
 
 add_subdirectory(external)
 
-# Final setup for miniupnpc
-if(UPNP_STATIC OR IOS)
-  add_definitions("-DUPNP_STATIC")
-else()
-  add_definitions("-DUPNP_DYNAMIC")
-  include_directories(${UPNP_INCLUDE})
-endif()
-
 # Final setup for libunbound
 include_directories(${UNBOUND_INCLUDE})
 link_directories(${UNBOUND_LIBRARY_DIRS})
@@ -469,9 +461,12 @@ link_directories(${LIBUNWIND_LIBRARY_DIRS})
 
 # Final setup for libpcsc
 if (PCSC_FOUND) 
+  message(STATUS "Using PCSC include dir at ${PCSC_INCLUDE_DIR}")
   add_definitions(-DHAVE_PCSC)
   include_directories(${PCSC_INCLUDE_DIR})
   link_directories(${LIBPCSC_LIBRARY_DIRS})
+else (PCSC_FOUND)
+  message(STATUS "Could not find PCSC")
 endif()
 
 if(MSVC)
