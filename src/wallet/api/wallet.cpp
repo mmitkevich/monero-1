@@ -417,7 +417,6 @@ WalletImpl::~WalletImpl()
 
 bool WalletImpl::create(const std::string &path, const std::string &password, const std::string &language)
 {
-    return true;
     boost::mutex::scoped_lock lock(m_refreshMutex);
     clearStatus();
     m_recoveringFromSeed = false;
