@@ -134,7 +134,7 @@ public:
     void setSubaddressLabel(uint32_t accountIndex, uint32_t addressIndex, const std::string &label) override;
 
     MultisigState multisig() const override;
-    std::string getMultisigInfo() const override;
+    std::string getMultisigInfo() override;
     std::string makeMultisig(const std::vector<std::string>& info, uint32_t threshold) override;
     bool finalizeMultisig(const std::vector<std::string>& extraMultisigInfo) override;
     bool exportMultisigImages(std::string& images) override;
@@ -233,6 +233,7 @@ private:
     boost::mutex        m_refreshMutex2;
     boost::condition_variable m_refreshCV;
     boost::thread       m_refreshThread;
+    boost::condition_variable m_refreshExited;
     // flag indicating wallet is recovering from seed
     // so it shouldn't be considered as new and pull blocks (slow-refresh)
     // instead of pulling hashes (fast-refresh)

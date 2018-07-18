@@ -377,6 +377,8 @@ WalletImpl::WalletImpl(NetworkType nettype)
     , m_rebuildWalletCache(false)
     , m_is_connected(false)
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
+    
     m_wallet = new tools::wallet2(static_cast<cryptonote::network_type>(nettype));
     m_history = new TransactionHistoryImpl(this);
     m_wallet2Callback = new Wallet2CallbackImpl(this);
@@ -390,10 +392,7 @@ WalletImpl::WalletImpl(NetworkType nettype)
 
     m_refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS;
 
-    m_refreshThread = boost::thread([this] () {
-        this->refreshThreadFunc();
-    });
-
+    m_refreshThread = boost::thread(boost::bind(&WalletImpl::refreshThreadFunc, this));
 }
 
 WalletImpl::~WalletImpl()
@@ -403,9 +402,10 @@ WalletImpl::~WalletImpl()
     // Pause refresh thread - prevents refresh from starting again
     pauseRefresh();
     // Close wallet - stores cache and stops ongoing refresh operation 
-    close(false); // do not store wallet as part of the closing activities
     // Stop refresh thread
     stopRefresh();
+    close(false); // do not store wallet as part of the closing activities
+    LOG_PRINT_L1(__FUNCTION__ << " destructors");
     delete m_wallet2Callback;
     delete m_history;
     delete m_addressBook;
@@ -417,7 +417,8 @@ WalletImpl::~WalletImpl()
 
 bool WalletImpl::create(const std::string &path, const std::string &password, const std::string &language)
 {
-
+    return true;
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     clearStatus();
     m_recoveringFromSeed = false;
     m_recoveringFromDevice = false;
@@ -705,7 +706,7 @@ bool WalletImpl::recover(const std::string &path, const std::string &password, c
 
 bool WalletImpl::close(bool store)
 {
-
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     bool result = false;
     LOG_PRINT_L1("closing wallet...");
     try {
@@ -1001,6 +1002,7 @@ bool WalletImpl::refresh()
 
 void WalletImpl::refreshAsync()
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     LOG_PRINT_L3(__FUNCTION__ << ": Refreshing asynchronously..");
     clearStatus();
     m_refreshCV.notify_one();
@@ -1154,7 +1156,8 @@ MultisigState WalletImpl::multisig() const {
     return state;
 }
 
-string WalletImpl::getMultisigInfo() const {
+string WalletImpl::getMultisigInfo()  {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
         return m_wallet->get_multisig_info();
@@ -1167,6 +1170,7 @@ string WalletImpl::getMultisigInfo() const {
 }
 
 string WalletImpl::makeMultisig(const vector<string>& info, uint32_t threshold) {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
 
@@ -1184,6 +1188,7 @@ string WalletImpl::makeMultisig(const vector<string>& info, uint32_t threshold) 
 }
 
 bool WalletImpl::finalizeMultisig(const vector<string>& extraMultisigInfo) {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
         checkMultisigWalletNotReady(m_wallet);
@@ -1202,6 +1207,7 @@ bool WalletImpl::finalizeMultisig(const vector<string>& extraMultisigInfo) {
 }
 
 bool WalletImpl::exportMultisigImages(string& images) {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
         checkMultisigWalletReady(m_wallet);
@@ -1218,6 +1224,7 @@ bool WalletImpl::exportMultisigImages(string& images) {
 }
 
 size_t WalletImpl::importMultisigImages(const vector<string>& images) {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
         checkMultisigWalletReady(m_wallet);
@@ -1246,6 +1253,7 @@ size_t WalletImpl::importMultisigImages(const vector<string>& images) {
 }
 
 PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signData) {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     try {
         clearStatus();
         checkMultisigWalletReady(m_wallet);
@@ -1931,7 +1939,7 @@ void WalletImpl::setStatus(int status, const std::string& message) const
 void WalletImpl::refreshThreadFunc()
 {
     LOG_PRINT_L3(__FUNCTION__ << ": starting refresh thread");
-
+try{
     while (true) {
         boost::mutex::scoped_lock lock(m_refreshMutex);
         if (m_refreshThreadDone) {
@@ -1955,7 +1963,14 @@ void WalletImpl::refreshThreadFunc()
             doRefresh();
         }
     }
+}catch(const std::exception & e) {
+    setStatusError(e.what());
+}
     LOG_PRINT_L3(__FUNCTION__ << ": refresh thread stopped");
+    {
+        boost::mutex::scoped_lock lock(m_refreshMutex);
+        m_refreshExited.notify_all();
+    }
 }
 
 void WalletImpl::doRefresh()
@@ -1991,6 +2006,7 @@ void WalletImpl::doRefresh()
 
 void WalletImpl::startRefresh()
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     if (!m_refreshEnabled) {
         LOG_PRINT_L2(__FUNCTION__ << ": refresh started/resumed...");
         m_refreshEnabled = true;
@@ -2002,16 +2018,19 @@ void WalletImpl::startRefresh()
 
 void WalletImpl::stopRefresh()
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     if (!m_refreshThreadDone) {
         m_refreshEnabled = false;
         m_refreshThreadDone = true;
         m_refreshCV.notify_one();
-        m_refreshThread.join();
+        //m_refreshThread.join();
     }
+            m_refreshExited.wait(lock);
 }
 
 void WalletImpl::pauseRefresh()
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     LOG_PRINT_L2(__FUNCTION__ << ": refresh paused...");
     // TODO synchronize access
     if (!m_refreshThreadDone) {
@@ -2192,6 +2211,7 @@ bool WalletImpl::setRing(const std::string &key_image, const std::vector<uint64_
 
 void WalletImpl::segregatePreForkOutputs(bool segregate)
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     m_wallet->segregate_pre_fork_outputs(segregate);
 }
 
@@ -2202,6 +2222,7 @@ void WalletImpl::segregationHeight(uint64_t height)
 
 void WalletImpl::keyReuseMitigation2(bool mitigation)
 {
+    boost::mutex::scoped_lock lock(m_refreshMutex);
     m_wallet->key_reuse_mitigation2(mitigation);
 }
 
