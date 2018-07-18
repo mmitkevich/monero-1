@@ -694,7 +694,7 @@ struct Wallet
      * @brief getMultisigInfo
      * @return serialized and signed multisig info string
      */
-    virtual std::string getMultisigInfo() const = 0;
+    virtual std::string getMultisigInfo()  = 0;
     /**
      * @brief makeMultisig - switches wallet in multisig state. The one and only creation phase for N / N wallets
      * @param info - vector of multisig infos from other participants obtained with getMulitisInfo call
