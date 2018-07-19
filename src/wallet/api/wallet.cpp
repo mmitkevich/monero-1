@@ -376,6 +376,8 @@ WalletImpl::WalletImpl(NetworkType nettype)
     , m_synchronized(false)
     , m_rebuildWalletCache(false)
     , m_is_connected(false)
+    , m_refreshThreadDone(false)
+    , m_refreshEnabled(false)
 {
     boost::mutex::scoped_lock lock(m_refreshMutex);
     
@@ -418,6 +420,7 @@ WalletImpl::~WalletImpl()
 bool WalletImpl::create(const std::string &path, const std::string &password, const std::string &language)
 {
     boost::mutex::scoped_lock lock(m_refreshMutex);
+    LOG_PRINT_L1(__FUNCTION__);
     clearStatus();
     m_recoveringFromSeed = false;
     m_recoveringFromDevice = false;
@@ -1938,33 +1941,33 @@ void WalletImpl::setStatus(int status, const std::string& message) const
 void WalletImpl::refreshThreadFunc()
 {
     LOG_PRINT_L3(__FUNCTION__ << ": starting refresh thread");
-try{
-    while (true) {
-        boost::mutex::scoped_lock lock(m_refreshMutex);
-        if (m_refreshThreadDone) {
-            break;
-        }
-        LOG_PRINT_L3(__FUNCTION__ << ": waiting for refresh...");
-        // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
-        // if not - we wait forever
-        if (m_refreshIntervalMillis > 0) {
-            boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
-            m_refreshCV.timed_wait(lock, wait_for_ms);
-        } else {
-            m_refreshCV.wait(lock);
-        }
+    try{
+        while (true) {
+            boost::mutex::scoped_lock lock(m_refreshMutex);
+            if (m_refreshThreadDone) {
+                break;
+            }
+            LOG_PRINT_L3(__FUNCTION__ << ": waiting for refresh...");
+            // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
+            // if not - we wait forever
+            if (m_refreshIntervalMillis > 0) {
+                boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
+                m_refreshCV.timed_wait(lock, wait_for_ms);
+            } else {
+                m_refreshCV.wait(lock);
+            }
 
-        LOG_PRINT_L3(__FUNCTION__ << ": refresh lock acquired...");
-        LOG_PRINT_L3(__FUNCTION__ << ": m_refreshEnabled: " << m_refreshEnabled);
-        LOG_PRINT_L3(__FUNCTION__ << ": m_status: " << status());
-        if (m_refreshEnabled) {
-            LOG_PRINT_L3(__FUNCTION__ << ": refreshing...");
-            doRefresh();
+            LOG_PRINT_L3(__FUNCTION__ << ": refresh lock acquired...");
+            LOG_PRINT_L3(__FUNCTION__ << ": m_refreshEnabled: " << m_refreshEnabled);
+            LOG_PRINT_L3(__FUNCTION__ << ": m_status: " << status());
+            if (m_refreshEnabled) {
+                LOG_PRINT_L3(__FUNCTION__ << ": refreshing...");
+                doRefresh();
+            }
         }
+    }catch(const std::exception & e) {
+        setStatusError(e.what());
     }
-}catch(const std::exception & e) {
-    setStatusError(e.what());
-}
     LOG_PRINT_L3(__FUNCTION__ << ": refresh thread stopped");
     {
         boost::mutex::scoped_lock lock(m_refreshMutex);
@@ -2019,12 +2022,14 @@ void WalletImpl::stopRefresh()
 {
     boost::mutex::scoped_lock lock(m_refreshMutex);
     if (!m_refreshThreadDone) {
+        LOG_PRINT_L1(__FUNCTION__ << ": stopping refresh");
         m_refreshEnabled = false;
         m_refreshThreadDone = true;
         m_refreshCV.notify_one();
         //m_refreshThread.join();
     }
-            m_refreshExited.wait(lock);
+    LOG_PRINT_L1(__FUNCTION__ << ": waiting refresh to exit...");
+    m_refreshExited.wait(lock);
 }
 
 void WalletImpl::pauseRefresh()

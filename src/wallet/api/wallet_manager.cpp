@@ -54,6 +54,7 @@ Wallet *WalletManagerImpl::createWallet(const std::string &path, const std::stri
 {
     WalletImpl * wallet = new WalletImpl(nettype);
     wallet->create(path, password, language);
+    LOG_PRINT_L1(__FUNCTION__ << " exiting ");
     return wallet;
 }
 
