@@ -442,7 +442,7 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   m_db->block_txn_stop();
 
   uint64_t num_popped_blocks = 0;
-  while (true)
+  while (!m_db->is_read_only())
   {
     const uint64_t top_height = m_db->height() - 1;
     const crypto::hash top_id = m_db->top_block_hash();
@@ -1195,6 +1195,12 @@ bool Blockchain::create_block_template(block& b, const account_public_address& m
   b.prev_id = get_tail_id();
   b.timestamp = time(NULL);
 
+  uint64_t median_ts;
+  if (!check_block_timestamp(b, median_ts))
+  {
+    b.timestamp = median_ts;
+  }
+
   diffic = get_difficulty_for_next_block();
   CHECK_AND_ASSERT_MES(diffic, false, "difficulty overhead.");
 
@@ -1935,14 +1941,21 @@ bool Blockchain::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMA
 
   res.outs.clear();
   res.outs.reserve(req.outputs.size());
-  for (const auto &i: req.outputs)
+  try
   {
-    // get tx_hash, tx_out_index from DB
-    const output_data_t od = m_db->get_output_key(i.amount, i.index);
-    tx_out_index toi = m_db->get_output_tx_and_index(i.amount, i.index);
-    bool unlocked = is_tx_spendtime_unlocked(m_db->get_tx_unlock_time(toi.first));
+    for (const auto &i: req.outputs)
+    {
+      // get tx_hash, tx_out_index from DB
+      const output_data_t od = m_db->get_output_key(i.amount, i.index);
+      tx_out_index toi = m_db->get_output_tx_and_index(i.amount, i.index);
+      bool unlocked = is_tx_spendtime_unlocked(m_db->get_tx_unlock_time(toi.first));
 
-    res.outs.push_back({od.pubkey, od.commitment, unlocked, od.height, toi.first});
+      res.outs.push_back({od.pubkey, od.commitment, unlocked, od.height, toi.first});
+    }
+  }
+  catch (const std::exception &e)
+  {
+    return false;
   }
   return true;
 }
@@ -3165,10 +3178,10 @@ uint64_t Blockchain::get_adjusted_time() const
 }
 //------------------------------------------------------------------
 //TODO: revisit, has changed a bit on upstream
-bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const block& b) const
+bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const block& b, uint64_t& median_ts) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  uint64_t median_ts = epee::misc_utils::median(timestamps);
+  median_ts = epee::misc_utils::median(timestamps);
 
   if(b.timestamp < median_ts)
   {
@@ -3186,7 +3199,7 @@ bool Blockchain::check_block_timestamp(std::vector<uint64_t>& timestamps, const 
 //   true if the block's timestamp is not less than the timestamp of the
 //       median of the selected blocks
 //   false otherwise
-bool Blockchain::check_block_timestamp(const block& b) const
+bool Blockchain::check_block_timestamp(const block& b, uint64_t& median_ts) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   if(b.timestamp > get_adjusted_time() + CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT)
@@ -3211,7 +3224,7 @@ bool Blockchain::check_block_timestamp(const block& b) const
     timestamps.push_back(m_db->get_block_timestamp(offset));
   }
 
-  return check_block_timestamp(timestamps, b);
+  return check_block_timestamp(timestamps, b, median_ts);
 }
 //------------------------------------------------------------------
 void Blockchain::return_tx_to_pool(std::vector<transaction> &txs)
@@ -3905,7 +3918,7 @@ uint64_t Blockchain::prevalidate_block_hashes(uint64_t height, const std::list<c
       // add to the known hashes array
       if (!valid)
       {
-        MWARNING("invalid hash for blocks " << n * HASH_OF_HASHES_STEP << " - " << (n * HASH_OF_HASHES_STEP + HASH_OF_HASHES_STEP - 1));
+        MDEBUG("invalid hash for blocks " << n * HASH_OF_HASHES_STEP << " - " << (n * HASH_OF_HASHES_STEP + HASH_OF_HASHES_STEP - 1));
         break;
       }
 
@@ -4403,7 +4416,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "59261c03b54bcb21bd463f9fe40a94f40840a12642e9a3b3bfb11b35839a5fe3";
+static const char expected_block_hashes_hash[] = "0924bc1c47aae448321fde949554be192878dd800e6489379865218f84eacbca";
 void Blockchain::load_compiled_in_block_hashes()
 {
   const bool testnet = m_nettype == TESTNET;
