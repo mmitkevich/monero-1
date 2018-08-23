@@ -7098,8 +7098,8 @@ void wallet2::light_wallet_get_address_txs()
     {
       crypto::public_key tx_public_key;
       crypto::key_image key_image;
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.key_image), error::wallet_internal_error, "Invalid key_image field");
+      //CRITICAL MM FIXME: THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+      //CRITICAL MM FIXME: THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.key_image), error::wallet_internal_error, "Invalid key_image field");
       string_tools::hex_to_pod(so.tx_pub_key, tx_public_key);
       string_tools::hex_to_pod(so.key_image, key_image);
 
@@ -7116,8 +7116,8 @@ void wallet2::light_wallet_get_address_txs()
     crypto::hash payment_id = null_hash;
     crypto::hash tx_hash;
     
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.hash), error::wallet_internal_error, "Invalid hash field");
+    // CRITICAL! MM FIXME: THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
+    // CRITICAL! MM FIXME: THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.hash), error::wallet_internal_error, "Invalid hash field");
     string_tools::hex_to_pod(t.payment_id, payment_id);
     string_tools::hex_to_pod(t.hash, tx_hash);
 
