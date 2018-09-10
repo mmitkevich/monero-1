@@ -10149,7 +10149,12 @@ size_t wallet2::import_multisig(std::vector<cryptonote::blobdata> blobs)
   {
     refresh();
   }
-  catch (...) {}
+  catch (...)
+  {
+    m_multisig_rescan_info = NULL;
+    m_multisig_rescan_k = NULL;
+    throw;
+  }
   m_multisig_rescan_info = NULL;
   m_multisig_rescan_k = NULL;
 
