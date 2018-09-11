@@ -38,6 +38,7 @@
 #include "subaddress_account.h"
 #include "common_defines.h"
 #include "common/util.h"
+#include "common/base58.h"
 
 #include "mnemonics/electrum-words.h"
 #include "mnemonics/english.h"
@@ -2199,6 +2200,37 @@ void WalletImpl::segregationHeight(uint64_t height)
 void WalletImpl::keyReuseMitigation2(bool mitigation)
 {
     m_wallet->key_reuse_mitigation2(mitigation);
+}
+
+
+std::string signMessagePrefix(const std::string& message, const std::string& secretKey, const std::string& prefix)
+{
+    cryptonote::blobdata keyData;
+    if(!epee::string_tools::parse_hexstr_to_binbuff(secretKey, keyData) || keyData.size() != sizeof(crypto::secret_key)) {
+        return "";
+    }
+
+    crypto::secret_key sk = *reinterpret_cast<const crypto::secret_key*>(keyData.data());
+    crypto::public_key pk;
+    if (!crypto::secret_key_to_public_key(sk, pk)) {
+        return "";
+    }
+
+    crypto::hash hash;
+    crypto::cn_fast_hash(message.data(), message.size(), hash);
+    crypto::signature signature;
+    crypto::generate_signature(hash, pk, sk, signature);
+    return prefix + tools::base58::encode(std::string((const char *)&signature, sizeof(signature)));
+}
+
+std::string signMessage(const std::string& message, const std::string& secretKey)
+{
+    return signMessagePrefix(message, secretKey, "SigV1");
+}
+
+std::string signMultisigParticipantMessage(const std::string& message, const std::string& secretKey)
+{
+    return signMessagePrefix(message, secretKey, "SigMultisigPkV1");
 }
 
 } // namespace

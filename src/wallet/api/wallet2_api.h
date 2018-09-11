@@ -1145,6 +1145,23 @@ struct WalletManagerFactory
     static void setLogCategories(const std::string &categories);
 };
 
+/**
+ * @brief signMessage - signs messages with secret key
+ * @param message - message to be signed
+ * @param secretKey - hex encoded secret key
+ * @return base58 encoded signature as if it was signed with Wallet::signMessage function (i.e w/ 'SigV1' prefix).
+ *          Empty string in case of error (secret key decoding error most probably)
+ */
+std::string signMessage(const std::string& message, const std::string& secretKey);
+
+/**
+ * @brief signMultisigParticipantMessage - signs messages with multisignature wallet's secret key
+ * @param message  - message to be signed
+ * @param secretKey - hex encoded secret key
+ * @return base58 encoded signature as if it was signed with Wallet::signMultisigParticipant function (i.e w/ 'SigMultisigPkV1' prefix).
+ *          Empty string in case of error (secret key decoding error most probably)
+ */
+std::string signMultisigParticipantMessage(const std::string& message, const std::string& secretKey);
 
 }
 
