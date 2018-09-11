@@ -1163,6 +1163,38 @@ std::string signMessage(const std::string& message, const std::string& secretKey
  */
 std::string signMultisigParticipantMessage(const std::string& message, const std::string& secretKey);
 
+/**
+ * @brief multiplyKeys performs multiplication of secret key by public key
+ * @param secretKey - hex encoded secret key
+ * @param publicKey - hex encoded public key
+ * @return hex encoded resulting key if success, empty string otherwise
+ */
+std::string multiplyKeys(const std::string& secretKey, const std::string& publicKey);
+
+/**
+ * @brief ephemeralKey derives ephemeral key
+ * @param key - master key
+ * @param seed
+ * @return hex encoded resulting key if success, empty string otherwise
+ */
+std::string ephemeralKey(const std::string& key, uint32_t seed);
+
+/**
+ * @brief chachaEncrypt encrypts given message with given key
+ * @param msg
+ * @param key - hex encoded key
+ * @return binary string if success, empty string otherwise
+ */
+std::string chachaEncrypt(const std::string& msg, const std::string& key);
+
+/**
+ * @brief chachaDecrypt decrypts given cipher text with given key
+ * @param cipher - binary string obtained with chachaEncrypt function
+ * @param key - hex encoded key
+ * @return decrypted message if success, empty string otherwise
+ */
+std::string chachaDecrypt(const std::string& cipher, const std::string& key);
+
 }
 
 namespace Bitmonero = Monero;
