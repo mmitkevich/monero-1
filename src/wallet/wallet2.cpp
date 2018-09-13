@@ -1756,6 +1756,17 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
     std::list<block_complete_entry>::const_iterator blocki = blocks.begin();
     for (size_t b = 0; b < blocks_size; b += threads)
     {
+      // MM FIXME:
+      // block_size==1000 is too high for mobile devices to wait until processed. 
+      // So why not exit here if m_run is false?
+      // It seems that process_new_blockchain_entry is atomic transaction with memory state of blockchain
+      // So if we early exit here we wouldn't loose any blocks since m_blockchain is not updated.
+      // MM TODO: ask core team
+      if(!m_run.load(std::memory_order_relaxed)) {
+        LOG_PRINT_L0("process_blocks early exit "<<b<<"/"<<blocks_size);
+        return;
+      }
+      
       size_t round_size = std::min((size_t)threads, blocks_size - b);
       //tools::threadpool::waiter waiter;
 
@@ -1778,7 +1789,6 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
         const crypto::hash &bl_id = round_block_hashes[i];
         cryptonote::block &bl = round_blocks[i];
         
-        MINFO("round "<<i<<"/"<<round_size<<" "<<bl_id);
 
         if(current_index >= m_blockchain.size())
         {
