@@ -770,6 +770,14 @@ bool wallet2::init(std::string daemon_address, boost::optional<epee::net_utils::
   return m_http_client.set_server(get_daemon_address(), get_daemon_login(), ssl);
 }
 //----------------------------------------------------------------------------------------------------
+void wallet2::stop()
+{ 
+  MINFO("wallet2::stop()");
+  m_run.store(false, std::memory_order_relaxed);
+  MINFO("wallet2::stop(): m_waiter.wait()...");
+  m_waiter.wait();
+}
+//----------------------------------------------------------------------------------------------------
 bool wallet2::is_deterministic() const
 {
   crypto::secret_key second;
@@ -1141,7 +1149,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     int num_vouts_received = 0;
     tx_pub_key = pub_key_field.pub_key;
     tools::threadpool& tpool = tools::threadpool::getInstance();
-    tools::threadpool::waiter waiter;
+    //tools::threadpool::waiter waiter;
     const cryptonote::account_keys& keys = m_account.get_keys();
     crypto::key_derivation derivation;
 
@@ -1187,10 +1195,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         // the first one was already checked
         for (size_t i = 1; i < tx.vout.size(); ++i)
         {
-          tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
+          tpool.submit(&m_waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
             std::ref(tx_scan_info[i]), std::ref(output_found[i])));
         }
-        waiter.wait();
+        m_waiter.wait();
         // then scan all outputs from 0
         hwdev_lock.lock();
         hwdev.set_mode(hw::device::NONE);
@@ -1210,10 +1218,10 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     {
       for (size_t i = 0; i < tx.vout.size(); ++i)
       {
-        tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
+        tpool.submit(&m_waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
             std::ref(tx_scan_info[i]), std::ref(output_found[i])));
       }
-      waiter.wait();
+      m_waiter.wait();
 
       hwdev_lock.lock();
       hwdev.set_mode(hw::device::NONE);
@@ -1749,16 +1757,16 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
     for (size_t b = 0; b < blocks_size; b += threads)
     {
       size_t round_size = std::min((size_t)threads, blocks_size - b);
-      tools::threadpool::waiter waiter;
+      //tools::threadpool::waiter waiter;
 
       std::list<block_complete_entry>::const_iterator tmpblocki = blocki;
       for (size_t i = 0; i < round_size; ++i)
       {
-        tpool.submit(&waiter, boost::bind(&wallet2::parse_block_round, this, std::cref(tmpblocki->block),
+        tpool.submit(&m_waiter, boost::bind(&wallet2::parse_block_round, this, std::cref(tmpblocki->block),
           std::ref(round_blocks[i]), std::ref(round_block_hashes[i]), std::ref(error[i])));
         ++tmpblocki;
       }
-      waiter.wait();
+      m_waiter.wait();
       tmpblocki = blocki;
       for (size_t i = 0; i < round_size; ++i)
       {
@@ -1769,6 +1777,8 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
       {
         const crypto::hash &bl_id = round_block_hashes[i];
         cryptonote::block &bl = round_blocks[i];
+        
+        MINFO("round "<<i<<"/"<<round_size<<" "<<bl_id);
 
         if(current_index >= m_blockchain.size())
         {
@@ -2251,7 +2261,7 @@ void wallet2::refresh(uint64_t start_height, uint64_t & blocks_fetched, bool& re
   crypto::hash last_tx_hash_id = m_transfers.size() ? m_transfers.back().m_txid : null_hash;
   std::list<crypto::hash> short_chain_history;
   tools::threadpool& tpool = tools::threadpool::getInstance();
-  tools::threadpool::waiter waiter;
+  //tools::threadpool::waiter waiter;
   uint64_t blocks_start_height;
   std::list<cryptonote::block_complete_entry> blocks;
   std::vector<COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> o_indices;
@@ -2294,11 +2304,11 @@ void wallet2::refresh(uint64_t start_height, uint64_t & blocks_fetched, bool& re
         refreshed = false;
         break;
       }
-      tpool.submit(&waiter, [&]{pull_next_blocks(start_height, next_blocks_start_height, short_chain_history, blocks, next_blocks, next_o_indices, error);});
+      tpool.submit(&m_waiter, [&]{pull_next_blocks(start_height, next_blocks_start_height, short_chain_history, blocks, next_blocks, next_o_indices, error);});
 
       process_blocks(blocks_start_height, blocks, o_indices, added_blocks);
       blocks_fetched += added_blocks;
-      waiter.wait();
+      m_waiter.wait();
       if(blocks_start_height == next_blocks_start_height)
       {
         m_node_rpc_proxy.set_height(m_blockchain.size());
@@ -2320,7 +2330,7 @@ void wallet2::refresh(uint64_t start_height, uint64_t & blocks_fetched, bool& re
     catch (const std::exception&)
     {
       blocks_fetched += added_blocks;
-      waiter.wait();
+      m_waiter.wait();
       if(try_count < 3)
       {
         LOG_PRINT_L1("Another try pull_blocks (try_count=" << try_count << ")...");

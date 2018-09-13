@@ -49,6 +49,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "common/unordered_containers_boost_serialization.h"
+#include "common/threadpool.h"
 #include "crypto/chacha.h"
 #include "crypto/hash.h"
 #include "ringct/rctTypes.h"
@@ -67,7 +68,8 @@ class Serialization_portability_wallet_Test;
 namespace tools
 {
   class ringdb;
-
+  class threadpool;
+  
   class i_wallet2_callback
   {
   public:
@@ -591,7 +593,7 @@ namespace tools
     bool init(std::string daemon_address = "http://localhost:8080",
       boost::optional<epee::net_utils::http::login> daemon_login = boost::none, uint64_t upper_transaction_size_limit = 0, bool ssl = false);
 
-    void stop() { m_run.store(false, std::memory_order_relaxed); }
+    void stop();
 
     i_wallet2_callback* callback() const { return m_callback; }
     void callback(i_wallet2_callback* callback) { m_callback = callback; }
@@ -1249,6 +1251,8 @@ namespace tools
     std::string m_ring_database;
     bool m_ring_history_saved;
     std::unique_ptr<ringdb> m_ringdb;
+
+    tools::threadpool::waiter m_waiter;
   };
 }
 BOOST_CLASS_VERSION(tools::wallet2, 24)
