@@ -101,7 +101,7 @@ threadpool::waiter::~waiter()
 
 void threadpool::waiter::wait() {
   boost::unique_lock<boost::mutex> lock(mt);
-  while(num) cv.wait(lock);
+  while(num) cv.timed_wait(lock, boost::posix_time::milliseconds(1000));
 }
 
 void threadpool::waiter::inc() {
@@ -112,8 +112,7 @@ void threadpool::waiter::inc() {
 void threadpool::waiter::dec() {
   const boost::unique_lock<boost::mutex> lock(mt);
   num--;
-  if (!num)
-    cv.notify_one();
+  cv.notify_all();
 }
 
 void threadpool::run() {
