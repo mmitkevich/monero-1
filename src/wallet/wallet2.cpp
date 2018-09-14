@@ -1748,6 +1748,11 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
     std::list<block_complete_entry>::const_iterator blocki = blocks.begin();
     for (size_t b = 0; b < blocks_size; b += threads)
     {
+      if(!m_run.load(std::memory_order_relaxed)) {
+          LOG_PRINT_L0("process_blocks cancelled");
+          return;
+      }
+
       size_t round_size = std::min((size_t)threads, blocks_size - b);
       tools::threadpool::waiter waiter;
 
@@ -1767,6 +1772,10 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
       }
       for (size_t i = 0; i < round_size; ++i)
       {
+        if(!m_run.load(std::memory_order_relaxed)) {
+          LOG_PRINT_L0("process_blocks cancelled");
+          return;
+        }
         const crypto::hash &bl_id = round_block_hashes[i];
         cryptonote::block &bl = round_blocks[i];
 
@@ -1799,6 +1808,11 @@ void wallet2::process_blocks(uint64_t start_height, const std::list<cryptonote::
   {
   for(auto& bl_entry: blocks)
   {
+    if(!m_run.load(std::memory_order_relaxed)) {
+        LOG_PRINT_L0("process_blocks cancelled");
+        return;
+    }
+
     cryptonote::block bl;
     bool r = cryptonote::parse_and_validate_block_from_blob(bl_entry.block, bl);
     THROW_WALLET_EXCEPTION_IF(!r, error::block_parse_error, bl_entry.block);

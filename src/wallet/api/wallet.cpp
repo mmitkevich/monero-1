@@ -1998,6 +1998,7 @@ void WalletImpl::pauseRefresh()
     // TODO synchronize access
     if (!m_refreshThreadDone) {
         m_refreshEnabled = false;
+        m_wallet->stop();
     }
 }
 
