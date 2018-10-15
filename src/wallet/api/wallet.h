@@ -113,6 +113,8 @@ public:
     bool synchronized() const;
     bool refresh();
     void refreshAsync();
+    bool rescanBlockchain();
+    void rescanBlockchainAsync();
     void setAutoRefreshInterval(int millis);
     int autoRefreshInterval() const;
     void setRefreshFromBlockHeight(uint64_t refresh_from_block_height);
@@ -227,6 +229,8 @@ private:
     std::atomic<bool> m_refreshEnabled;
     std::atomic<bool> m_refreshThreadDone;
     std::atomic<int>  m_refreshIntervalMillis;
+
+    std::atomic<bool> m_refreshShouldRescan;
     // synchronizing  refresh loop;
     boost::mutex        m_refreshMutex;
 
