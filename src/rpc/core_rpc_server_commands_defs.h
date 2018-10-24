@@ -75,6 +75,24 @@ namespace cryptonote
     };
   };
 
+  struct tx_output_indices
+  {
+    std::vector<uint64_t> indices;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(indices)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct block_output_indices
+  {
+    std::vector<tx_output_indices> indices;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(indices)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct COMMAND_RPC_GET_BLOCKS_FAST
   {
 
@@ -91,24 +109,7 @@ namespace cryptonote
         KV_SERIALIZE_OPT(no_miner_tx, false)
       END_KV_SERIALIZE_MAP()
     };
-
-    struct tx_output_indices
-    {
-      std::vector<uint64_t> indices;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(indices)
-      END_KV_SERIALIZE_MAP()
-    };
-
-    struct block_output_indices
-    {
-      std::vector<tx_output_indices> indices;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(indices)
-      END_KV_SERIALIZE_MAP()
-    };
+   
 
     struct response
     {
@@ -126,6 +127,39 @@ namespace cryptonote
         KV_SERIALIZE(status)
         KV_SERIALIZE(output_indices)
         KV_SERIALIZE(untrusted)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_GET_BLOCKS_FAST2
+  {
+
+    struct request : public COMMAND_RPC_GET_BLOCKS_FAST::request
+    {
+      crypto::public_key spend_public_key;
+      crypto::secret_key view_secret_key;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(block_ids)
+        KV_SERIALIZE(start_height)
+        KV_SERIALIZE(prune)
+        KV_SERIALIZE_OPT(no_miner_tx, false)
+        KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(spend_public_key)
+        KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(view_secret_key)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response : public COMMAND_RPC_GET_BLOCKS_FAST::response
+    {
+      std::vector<bool> has_own_txes; // number of account-affecting transactions
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(blocks)
+        KV_SERIALIZE(start_height)
+        KV_SERIALIZE(current_height)
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(output_indices)
+        KV_SERIALIZE(untrusted)
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(has_own_txes)
       END_KV_SERIALIZE_MAP()
     };
   };

@@ -230,11 +230,11 @@ namespace cryptonote
     return ss.str();
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request& req, COMMAND_RPC_GET_BLOCKS_FAST::response& res)
+  bool core_rpc_server::on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST2::request& req, COMMAND_RPC_GET_BLOCKS_FAST2::response& res)
   {
     PERF_TIMER(on_get_blocks);
     bool r;
-    if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_BLOCKS_FAST>(invoke_http_mode::BIN, "/getblocks.bin", req, res, r))
+    if (use_bootstrap_daemon_if_necessary<COMMAND_RPC_GET_BLOCKS_FAST2>(invoke_http_mode::BIN, "/getblocks.bin", req, res, r))
       return r;
 
     std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > > bs;
@@ -252,10 +252,14 @@ namespace cryptonote
     {
       res.blocks.resize(res.blocks.size()+1);
       res.blocks.back().block = bd.first.first;
+      
+      res.has_own_txes.resize(res.blocks.size());
+      res.has_own_txes.back() = (res.has_own_txes.size() % 13) ==0;
+
       pruned_size += bd.first.first.size();
       unpruned_size += bd.first.first.size();
-      res.output_indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices());
-      res.output_indices.back().indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::tx_output_indices());
+      res.output_indices.push_back(block_output_indices());
+      res.output_indices.back().indices.push_back(tx_output_indices());
       if (!req.no_miner_tx)
       {
         bool r = m_core.get_tx_outputs_gindexs(bd.first.second, res.output_indices.back().indices.back().indices);
@@ -276,7 +280,7 @@ namespace cryptonote
         i->second.shrink_to_fit();
         pruned_size += res.blocks.back().txs.back().size();
 
-        res.output_indices.back().indices.push_back(COMMAND_RPC_GET_BLOCKS_FAST::tx_output_indices());
+        res.output_indices.back().indices.push_back(tx_output_indices());
         bool r = m_core.get_tx_outputs_gindexs(i->first, res.output_indices.back().indices.back().indices);
         if (!r)
         {
