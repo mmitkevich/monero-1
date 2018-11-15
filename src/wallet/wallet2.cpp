@@ -1929,7 +1929,8 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
 //----------------------------------------------------------------------------------------------------
 void wallet2::process_new_blockchain_entry(const cryptonote::block& b, const cryptonote::block_complete_entry& bche, const parsed_block &parsed_block, const crypto::hash& bl_id, uint64_t height, const std::vector<tx_cache_data> &tx_cache_data, size_t tx_cache_data_offset)
 {
-  THROW_WALLET_EXCEPTION_IF(bche.txs.size() + 1 != parsed_block.o_indices.indices.size(), error::wallet_internal_error,
+  if(m_refresh_type != RefreshFastSync || !(bche.txs.size()==0 && parsed_block.o_indices.indices.size()==0))
+    THROW_WALLET_EXCEPTION_IF(bche.txs.size() + 1 != parsed_block.o_indices.indices.size(), error::wallet_internal_error,
       "block transactions=" + std::to_string(bche.txs.size()) +
       " not match with daemon response size=" + std::to_string(parsed_block.o_indices.indices.size()));
 
@@ -2027,6 +2028,32 @@ void wallet2::pull_blocks(uint64_t start_height, uint64_t &blocks_start_height, 
   blocks_start_height = res.start_height;
   blocks = std::move(res.blocks);
   o_indices = std::move(res.output_indices);
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::pull_fastsync_blocks(uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices, std::vector<crypto::hash> &my_hashes)
+{
+  cryptonote::COMMAND_RPC_GET_MY_BLOCKS::request req = AUTO_VAL_INIT(req);
+  cryptonote::COMMAND_RPC_GET_MY_BLOCKS::response res = AUTO_VAL_INIT(res);
+  req.version = 1;
+  req.params.short_chain = short_chain_history;
+  req.params.keys.resize(1);
+  req.params.keys[0].view_secret_key = get_account().get_keys().m_view_secret_key;
+  req.params.keys[0].spend_public_key = get_account().get_keys().m_account_address.m_spend_public_key;
+  req.params.keys[0].created_at = m_refresh_from_block_height;
+  
+  m_daemon_rpc_mutex.lock();
+  bool r = net_utils::invoke_http_bin("/fastsync.bin", req, res, m_http_client, rpc_timeout);
+  m_daemon_rpc_mutex.unlock();
+  THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "fastsync.bin");
+  blocks.resize(res.result.blocks.size());
+  o_indices.resize(res.result.blocks.size());
+  my_hashes.resize(res.result.blocks.size());
+  for(size_t i=0; i<res.result.blocks.size(); i++) {
+    blocks[i] = std::move(res.result.blocks[i].block);
+    o_indices[i] = std::move(res.result.blocks[i].output_indices);
+    my_hashes[i] = std::move(res.result.blocks[i].hash);
+  }
+  blocks_start_height = res.result.start_height;
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::pull_hashes(uint64_t start_height, uint64_t &blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<crypto::hash> &hashes)
@@ -2209,7 +2236,13 @@ void wallet2::pull_and_parse_next_blocks(uint64_t start_height, uint64_t &blocks
 
     // pull the new blocks
     std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> o_indices;
-    pull_blocks(start_height, blocks_start_height, short_chain_history, blocks, o_indices);
+    std::vector<crypto::hash> my_hashes;
+
+    if(m_refresh_type==RefreshFastSync)
+      pull_fastsync_blocks(start_height, blocks_start_height, short_chain_history, blocks, o_indices, my_hashes);
+    else
+      pull_blocks(start_height, blocks_start_height, short_chain_history, blocks, o_indices);
+    
     THROW_WALLET_EXCEPTION_IF(blocks.size() != o_indices.size(), error::wallet_internal_error, "Mismatched sizes of blocks and o_indices");
 
     tools::threadpool& tpool = tools::threadpool::getInstance();
@@ -2217,8 +2250,14 @@ void wallet2::pull_and_parse_next_blocks(uint64_t start_height, uint64_t &blocks
     parsed_blocks.resize(blocks.size());
     for (size_t i = 0; i < blocks.size(); ++i)
     {
-      tpool.submit(&waiter, boost::bind(&wallet2::parse_block_round, this, std::cref(blocks[i].block),
-        std::ref(parsed_blocks[i].block), std::ref(parsed_blocks[i].hash), std::ref(parsed_blocks[i].error)), true);
+      if(m_refresh_type==RefreshFastSync) {
+          if(blocks[i].block.size()>0)
+            cryptonote::parse_and_validate_block_from_blob(blocks[i].block, parsed_blocks[i].block);
+          parsed_blocks[i].hash = my_hashes[i];
+      }else{
+        tpool.submit(&waiter, boost::bind(&wallet2::parse_block_round, this, std::cref(blocks[i].block),
+          std::ref(parsed_blocks[i].block), std::ref(parsed_blocks[i].hash), std::ref(parsed_blocks[i].error)), true);
+      }
     }
     waiter.wait(&tpool);
     for (size_t i = 0; i < blocks.size(); ++i)
@@ -2692,7 +2731,10 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
         refreshed = false;
         break;
       }
-      tpool.submit(&waiter, [&]{pull_and_parse_next_blocks(start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, error);});
+      if(m_refresh_type!=RefreshFastSync)
+        tpool.submit(&waiter, [&]{pull_and_parse_next_blocks(start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, error);});
+      else
+        pull_and_parse_next_blocks(start_height, next_blocks_start_height, short_chain_history, blocks, parsed_blocks, next_blocks, next_parsed_blocks, error);
 
       if (!first)
       {
