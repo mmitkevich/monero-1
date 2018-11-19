@@ -2053,6 +2053,7 @@ void wallet2::pull_fastsync_blocks(uint64_t start_height, uint64_t &blocks_start
     o_indices[i] = std::move(res.result.blocks[i].output_indices);
     my_hashes[i] = std::move(res.result.blocks[i].hash);
   }
+  LOG_PRINT_L2("pull_fastsync_blocks: got "<<res.result.blocks.size()<< " blocks with start_height="<<res.result.start_height<<", m_blockchain.size()="<<m_blockchain.size());
   blocks_start_height = res.result.start_height;
 }
 //----------------------------------------------------------------------------------------------------
@@ -2080,6 +2081,10 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
   blocks_added = 0;
 
   THROW_WALLET_EXCEPTION_IF(blocks.size() != parsed_blocks.size(), error::wallet_internal_error, "size mismatch");
+
+  if(start_height>=m_blockchain.size()) {
+    LOG_PRINT_L2("process_parsed_blocks: start_height="<<start_height<<" m_blockchain.size()="<<m_blockchain.size()<<" m_blockchain.offset="<<m_blockchain.offset());
+  }
   THROW_WALLET_EXCEPTION_IF(!m_blockchain.is_in_bounds(current_index), error::out_of_hashchain_bounds_error);
 
   tools::threadpool& tpool = tools::threadpool::getInstance();
