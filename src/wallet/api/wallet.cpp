@@ -2032,7 +2032,19 @@ void WalletImpl::startRefresh()
     }
 }
 
+void WalletImpl::setFastSync(bool fastSync)
+{
+    if (fastSync) {
+        m_wallet->set_refresh_type(tools::wallet2::RefreshFastSync);
+    } else {
+        m_wallet->set_refresh_type(tools::wallet2::RefreshDefault);
+    }
+}
 
+bool WalletImpl::getFastSync()
+{
+    return m_wallet->get_refresh_type() == tools::wallet2::RefreshFastSync;
+}
 
 void WalletImpl::stopRefresh()
 {
