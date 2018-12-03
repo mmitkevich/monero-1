@@ -656,6 +656,16 @@ struct Wallet
     virtual int autoRefreshInterval() const = 0;
 
     /**
+     * @brief setFastSync - use fastsync refresh mode
+     */
+    virtual void setFastSync(bool fastSync) = 0;
+
+    /**
+     * @brief getFastSync - check if in fastsync refresh mode
+     */
+    virtual bool getFastSync() = 0;
+
+    /**
      * @brief addSubaddressAccount - appends a new subaddress account at the end of the last major index of existing subaddress accounts
      * @param label - the label for the new account (which is the as the label of the primary address (accountIndex,0))
      */
